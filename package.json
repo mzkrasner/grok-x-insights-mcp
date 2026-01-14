@@ -1,0 +1,58 @@
+{
+  "name": "grok-mcp",
+  "version": "1.0.0",
+  "description": "Grok X Insights MCP - Real-time social intelligence from X/Twitter via Grok",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "grok-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "prepare": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest watch",
+    "test:coverage": "vitest run --coverage",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\"",
+    "check-all": "npm run type-check && npm run lint && npm run format:check && npm test"
+  },
+  "keywords": [
+    "mcp",
+    "grok",
+    "twitter",
+    "x",
+    "ai",
+    "model-context-protocol",
+    "social-intelligence",
+    "sentiment-analysis",
+    "trend-analysis",
+    "claude",
+    "cursor"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.1",
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@trivago/prettier-plugin-sort-imports": "^6.0.0",
+    "@types/node": "^22.10.5",
+    "@typescript-eslint/eslint-plugin": "^6.7.4",
+    "@typescript-eslint/parser": "^6.7.4",
+    "@vitest/coverage-v8": "^3.2.4",
+    "eslint": "^8.50.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.0.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.4"
+  }
+}
