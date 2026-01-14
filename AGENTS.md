@@ -5,10 +5,10 @@
 **Grok X Insights MCP** (`grok-mcp`) provides real-time social intelligence from X/Twitter for AI assistants like Claude and Cursor — powered by Grok's live search capabilities instead of the expensive X API.
 
 **Core capabilities:**
-- 🔍 Search and analyze X/Twitter posts about any topic
-- 📊 Deep topic analysis with customizable aspects (influencers, sentiment, controversy, etc.)
-- 🔥 Trend identification with volume and sentiment metrics
-- 💬 Grok chat grounded in live X/Twitter data
+- Search and analyze X/Twitter posts about any topic
+- Deep topic analysis with customizable aspects (influencers, sentiment, controversy, etc.)
+- Trend identification with volume and sentiment metrics
+- Grok chat grounded in live X/Twitter data
 
 ## Architecture
 

@@ -6,13 +6,13 @@ Search posts, analyze sentiment, track trends, and understand what the world is 
 
 ## Features
 
-- 🔍 **Search & Analyze** — Query any topic and get structured analysis with themes, sentiment, and key observations
-- 📊 **Deep Topic Analysis** — Customize what aspects to analyze (influencers, controversy, emerging trends, etc.)
-- 🔥 **Trend Detection** — Identify what's trending with volume metrics and sentiment breakdown
-- 💬 **Grounded Chat** — Chat with Grok AI, optionally grounded in live X/Twitter data
-- 🔗 **Live Citations** — Every analysis includes source URLs from actual X/Twitter posts
-- ⚡ **Reliable** — Automatic retry with exponential backoff for rate limits
-- 🛡️ **Type-Safe** — Full TypeScript with Zod validation
+- **Search & Analyze** — Query any topic and get structured analysis with themes, sentiment, and key observations
+- **Deep Topic Analysis** — Customize what aspects to analyze (influencers, controversy, emerging trends, etc.)
+- **Trend Detection** — Identify what's trending with volume metrics and sentiment breakdown
+- **Grounded Chat** — Chat with Grok AI, optionally grounded in live X/Twitter data
+- **Live Citations** — Every analysis includes source URLs from actual X/Twitter posts
+- **Reliable** — Automatic retry with exponential backoff for rate limits
+- **Type-Safe** — Full TypeScript with Zod validation
 
 ## Installation
 
@@ -252,4 +252,4 @@ LOG_LEVEL=debug  # error, warn, info, debug
 
 ## License
 
-MIT
+[MIT](LICENSE)
