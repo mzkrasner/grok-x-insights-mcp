@@ -1,0 +1,95 @@
+#!/usr/bin/env sh
+
+# Pre-push QA (full validation before pushing)
+# Mirrors CI exactly to prevent "works locally, fails in CI" issues
+
+# =============================================================================
+# CHECK 1: No uncommitted changes
+# =============================================================================
+UNCOMMITTED=$(git status --porcelain 2>/dev/null)
+if [ -n "$UNCOMMITTED" ]; then
+  echo "❌ Pre-push blocked: uncommitted changes detected"
+  echo ""
+  echo "   The following files have uncommitted changes:"
+  echo "$UNCOMMITTED" | head -20
+  echo ""
+  echo "   This can cause CI failures because:"
+  echo "   - Local cache may use stale/cached results"
+  echo "   - Committed code may depend on uncommitted files"
+  echo ""
+  echo "   Fix: Commit or stash your changes before pushing"
+  echo "        git stash"
+  echo "        git push"
+  echo "        git stash pop"
+  exit 1
+fi
+
+# =============================================================================
+# CHECK 2: Remote main must not be ahead of local
+# =============================================================================
+git fetch origin main --quiet 2>/dev/null
+BEHIND_COUNT=$(git rev-list --count HEAD..origin/main 2>/dev/null || echo "0")
+
+if [ "$BEHIND_COUNT" != "0" ]; then
+  echo "❌ Pre-push blocked: origin/main is $BEHIND_COUNT commit(s) ahead"
+  echo ""
+  echo "   Your branch is behind origin/main. This can cause:"
+  echo "   - Merge conflicts after push"
+  echo "   - CI failures due to incompatible changes"
+  echo ""
+  echo "   Fix: Rebase on latest main before pushing"
+  echo "        git fetch origin main"
+  echo "        git rebase origin/main"
+  exit 1
+fi
+
+# Disable interactive terminal features
+export CI=true
+export TERM=dumb
+
+# =============================================================================
+# Full QA Suite (same as npm run qa)
+# =============================================================================
+
+# Parallelize independent checks
+npm run format:check &
+FORMAT_PID=$!
+
+npm run lint &
+LINT_PID=$!
+
+npm run type-check &
+TYPE_CHECK_PID=$!
+
+# Wait for all parallel checks
+wait $FORMAT_PID || { echo "❌ Format check failed - run 'npm run format' to fix"; exit 1; }
+wait $LINT_PID || { echo "❌ Lint failed"; exit 1; }
+wait $TYPE_CHECK_PID || { echo "❌ Type check failed"; exit 1; }
+
+# Sequential checks (test and build depend on passing checks)
+npm run test:unit || { echo "❌ Unit tests failed"; exit 1; }
+npm run build || { echo "❌ Build failed"; exit 1; }
+
+# =============================================================================
+# Integration tests (REQUIRED - must have GROK_API_KEY)
+# =============================================================================
+# Load env from .env file if it exists
+if [ -f .env ]; then
+  export $(grep -v '^#' .env | grep GROK_API_KEY | xargs 2>/dev/null)
+fi
+
+if [ -z "$GROK_API_KEY" ]; then
+  echo "❌ Pre-push blocked: GROK_API_KEY not set"
+  echo ""
+  echo "   Integration tests are required before pushing."
+  echo "   Create a .env file with your API key:"
+  echo ""
+  echo "   GROK_API_KEY=xai-your-key-here"
+  echo ""
+  exit 1
+fi
+
+echo "Running integration tests..."
+npm run test:integration || { echo "❌ Integration tests failed"; exit 1; }
+
+echo "✅ Pre-push passed"

@@ -5,21 +5,31 @@
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "grok-mcp": "./dist/index.js"
+    "grok-mcp": "./dist/index.js",
+    "grok": "./dist/cli.js"
   },
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
-    "prepare": "npm run build",
+    "prepare": "husky",
     "test": "vitest run",
     "test:watch": "vitest watch",
     "test:coverage": "vitest run --coverage",
+    "test:unit": "vitest run grok-api.test.ts",
+    "test:integration": "vitest run grok-api.integration.test.ts",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
-    "check-all": "npm run type-check && npm run lint && npm run format:check && npm test"
+    "qa": "npm run format:check && npm run lint && npm run type-check && npm run test && npm run build",
+    "qa:quick": "npm run lint && npm run type-check"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "prettier --write",
+      "eslint --fix"
+    ]
   },
   "keywords": [
     "mcp",
@@ -39,6 +49,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.1",
     "axios": "^1.7.9",
+    "commander": "^14.0.2",
     "dotenv": "^16.4.7",
     "zod": "^3.24.1"
   },
@@ -50,6 +61,8 @@
     "@vitest/coverage-v8": "^3.2.4",
     "eslint": "^8.50.0",
     "eslint-config-prettier": "^9.1.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
     "prettier": "^3.0.3",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",

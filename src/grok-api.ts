@@ -1,19 +1,29 @@
 import axios, { type AxiosError } from 'axios'
 
 import { config, logger } from './config.js'
+import {
+  type GrokAgentRequest,
+  type GrokAgentResponse,
+  GrokAgentResponseSchema,
+  type GrokChatResponse,
+  GrokChatResponseSchema,
+  type GrokErrorResponse,
+  type XSearchTool,
+} from './schemas.js'
 
-const GROK_API_BASE_URL = 'https://api.x.ai/v1/chat/completions'
+// Re-export types for backwards compatibility
+export type {
+  GrokAgentRequest,
+  GrokAgentResponse,
+  GrokChatResponse,
+  GrokErrorResponse,
+  XSearchTool,
+}
+
+// New Agent Tools API endpoint (replaces deprecated chat/completions with search_parameters)
+const GROK_API_BASE_URL = 'https://api.x.ai/v1/responses'
 const MAX_RETRIES = 3
 const RETRYABLE_STATUS_CODES = [429, 500, 502, 503, 504]
-
-export interface GrokErrorResponse {
-  error?: {
-    message?: string
-    type?: string
-    code?: string
-  }
-  [key: string]: unknown
-}
 
 export class GrokApiError extends Error {
   public status: number
@@ -25,47 +35,6 @@ export class GrokApiError extends Error {
     this.status = status
     this.response = response
   }
-}
-
-export interface GrokMessage {
-  role: 'system' | 'user' | 'assistant'
-  content: string
-}
-
-export interface GrokSearchParameters {
-  mode: 'on' | 'off'
-  sources?: Array<{ type: 'x' }>
-  return_citations?: boolean
-  limit?: number
-}
-
-export interface GrokChatRequest {
-  model?: string
-  messages: GrokMessage[]
-  search_parameters?: GrokSearchParameters
-  temperature?: number
-  max_tokens?: number
-}
-
-export interface GrokChatResponse {
-  id: string
-  object: string
-  created: number
-  model: string
-  choices: Array<{
-    index: number
-    message: {
-      role: string
-      content: string
-    }
-    finish_reason: string
-  }>
-  usage?: {
-    prompt_tokens: number
-    completion_tokens: number
-    total_tokens: number
-  }
-  citations?: string[]
 }
 
 export class GrokApiClient {
@@ -85,13 +54,74 @@ export class GrokApiClient {
   }
 
   /**
-   * Make a chat completion request to Grok API with retry logic
+   * Convert agent response to normalized chat response format
    */
-  async chat(request: GrokChatRequest): Promise<GrokChatResponse> {
+  private normalizeResponse(agentResponse: GrokAgentResponse): GrokChatResponse {
+    // Extract the final message content from the output array
+    let content = ''
+    const citations: string[] = []
+
+    for (const output of agentResponse.output) {
+      if (output.type === 'message') {
+        // Handle the new content structure: array of content blocks
+        if (Array.isArray(output.content)) {
+          for (const block of output.content) {
+            if (block.type === 'output_text' && block.text) {
+              content += block.text
+            }
+            // Extract citations from annotations
+            if (block.annotations && Array.isArray(block.annotations)) {
+              for (const annotation of block.annotations) {
+                if (annotation && typeof annotation === 'object') {
+                  const ann = annotation as { type?: string; url?: string }
+                  if (ann.type === 'url_citation' && ann.url) {
+                    citations.push(ann.url)
+                  }
+                }
+              }
+            }
+          }
+        } else if (typeof output.content === 'string') {
+          // Fallback for string content
+          content += output.content
+        }
+      }
+    }
+
+    return {
+      id: agentResponse.id,
+      object: agentResponse.object,
+      created: agentResponse.created_at || Date.now(),
+      model: agentResponse.model,
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: 'assistant',
+            content,
+          },
+          finish_reason: 'stop',
+        },
+      ],
+      usage: agentResponse.usage
+        ? {
+            prompt_tokens: agentResponse.usage.input_tokens,
+            completion_tokens: agentResponse.usage.output_tokens,
+            total_tokens: agentResponse.usage.total_tokens,
+          }
+        : undefined,
+      citations: citations.length > 0 ? citations : undefined,
+    }
+  }
+
+  /**
+   * Make a request to Grok Agent Tools API with retry logic
+   */
+  async chat(request: GrokAgentRequest): Promise<GrokChatResponse> {
     const requestBody = {
       model: request.model || this.defaultModel,
-      messages: request.messages,
-      ...(request.search_parameters && { search_parameters: request.search_parameters }),
+      input: request.input,
+      ...(request.tools && { tools: request.tools }),
       ...(request.temperature !== undefined && { temperature: request.temperature }),
       ...(request.max_tokens && { max_tokens: request.max_tokens }),
     }
@@ -100,16 +130,35 @@ export class GrokApiClient {
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
-        const response = await axios.post<GrokChatResponse>(this.baseUrl, requestBody, {
+        const response = await axios.post<GrokAgentResponse>(this.baseUrl, requestBody, {
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${this.apiKey}`,
           },
-          timeout: 60000, // 60 second timeout
+          timeout: 120000, // 120 second timeout for agent requests
         })
 
         logger.debug(`Grok API response: ${response.status}`)
-        return response.data
+
+        // Validate response against schema
+        const parseResult = GrokAgentResponseSchema.safeParse(response.data)
+        if (!parseResult.success) {
+          logger.warn(`Response validation warning: ${parseResult.error.message}`)
+          // Still proceed with response, but log validation issues
+        }
+
+        const normalizedResponse = this.normalizeResponse(response.data as GrokAgentResponse)
+
+        // Validate normalized response
+        const normalizedParseResult = GrokChatResponseSchema.safeParse(normalizedResponse)
+        if (!normalizedParseResult.success) {
+          throw new GrokApiError(
+            `Invalid response structure: ${normalizedParseResult.error.message}`,
+            0
+          )
+        }
+
+        return normalizedResponse
       } catch (error) {
         if (axios.isAxiosError(error)) {
           const axiosError = error as AxiosError
@@ -158,6 +207,35 @@ export class GrokApiClient {
   }
 
   /**
+   * Calculate date range from time window string
+   */
+  private getDateRange(timeWindow: string): { from_date?: string; to_date?: string } {
+    const now = new Date()
+    const to_date = now.toISOString().split('T')[0]
+
+    let from: Date
+    switch (timeWindow) {
+      case '15min':
+      case '1hr':
+      case '4hr':
+        // For short windows, default to today
+        from = now
+        break
+      case '24hr':
+        from = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+        break
+      case '7d':
+        from = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        break
+      default:
+        from = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+    }
+
+    const from_date = from.toISOString().split('T')[0]
+    return { from_date, to_date }
+  }
+
+  /**
    * Search and analyze X/Twitter posts about a topic
    */
   async searchPosts(
@@ -168,11 +246,7 @@ export class GrokApiClient {
       analysisType?: 'sentiment' | 'themes' | 'both'
     } = {}
   ): Promise<GrokChatResponse> {
-    const {
-      timeWindow = '4hr',
-      limit = config.DEFAULT_SEARCH_LIMIT,
-      analysisType = 'both',
-    } = options
+    const { timeWindow = '4hr', analysisType = 'both' } = options
 
     const analysisInstructions = {
       sentiment:
@@ -182,7 +256,9 @@ export class GrokApiClient {
       both: 'Analyze both sentiment and themes: identify main topics, sentiment distribution, and key discussion patterns.',
     }[analysisType]
 
-    const prompt = `Analyze recent X/Twitter posts about: ${query}
+    const dateRange = this.getDateRange(timeWindow)
+
+    const prompt = `Search X/Twitter and analyze recent posts about: ${query}
 
 Time window: ${timeWindow}
 
@@ -206,13 +282,13 @@ Return a structured JSON analysis with:
 Only report what you observe in the posts. Include specific quotes where relevant.`
 
     return this.chat({
-      messages: [{ role: 'user', content: prompt }],
-      search_parameters: {
-        mode: 'on',
-        sources: [{ type: 'x' }],
-        return_citations: true,
-        limit,
-      },
+      input: [{ role: 'user', content: prompt }],
+      tools: [
+        {
+          type: 'x_search',
+          ...dateRange,
+        },
+      ],
       temperature: 0.3,
     })
   }
@@ -228,11 +304,12 @@ Only report what you observe in the posts. Include specific quotes where relevan
       timeWindow?: string
     } = {}
   ): Promise<GrokChatResponse> {
-    const { limit = config.DEFAULT_SEARCH_LIMIT, timeWindow = '4hr' } = options
+    const { timeWindow = '4hr' } = options
 
     const aspectsList = aspects.join(', ')
+    const dateRange = this.getDateRange(timeWindow)
 
-    const prompt = `Analyze X/Twitter posts about: ${topic}
+    const prompt = `Search X/Twitter and analyze posts about: ${topic}
 
 Focus on these specific aspects: ${aspectsList}
 
@@ -248,13 +325,13 @@ Format your response as a structured JSON object with keys for each aspect.
 Only report what you observe in the posts. Do not speculate or make recommendations.`
 
     return this.chat({
-      messages: [{ role: 'user', content: prompt }],
-      search_parameters: {
-        mode: 'on',
-        sources: [{ type: 'x' }],
-        return_citations: true,
-        limit,
-      },
+      input: [{ role: 'user', content: prompt }],
+      tools: [
+        {
+          type: 'x_search',
+          ...dateRange,
+        },
+      ],
       temperature: 0.3,
     })
   }
@@ -268,11 +345,11 @@ Only report what you observe in the posts. Do not speculate or make recommendati
       limit?: number
     } = {}
   ): Promise<GrokChatResponse> {
-    const { category, limit = config.DEFAULT_SEARCH_LIMIT } = options
+    const { category } = options
 
     const categoryText = category ? ` in the ${category} category` : ''
 
-    const prompt = `What are the trending topics and discussions on X/Twitter right now${categoryText}?
+    const prompt = `Search X/Twitter and identify the trending topics and discussions right now${categoryText}.
 
 Identify the top trending topics and provide a structured analysis:
 
@@ -292,14 +369,18 @@ Identify the top trending topics and provide a structured analysis:
 
 Focus on current, active discussions. Include specific examples where relevant.`
 
+    // Use today's date for trends
+    const today = new Date().toISOString().split('T')[0]
+
     return this.chat({
-      messages: [{ role: 'user', content: prompt }],
-      search_parameters: {
-        mode: 'on',
-        sources: [{ type: 'x' }],
-        return_citations: true,
-        limit,
-      },
+      input: [{ role: 'user', content: prompt }],
+      tools: [
+        {
+          type: 'x_search',
+          from_date: today,
+          to_date: today,
+        },
+      ],
       temperature: 0.3,
     })
   }
@@ -315,24 +396,14 @@ Focus on current, active discussions. Include specific examples where relevant.`
       temperature?: number
     } = {}
   ): Promise<GrokChatResponse> {
-    const {
-      enableSearch = false,
-      searchLimit = config.DEFAULT_SEARCH_LIMIT,
-      temperature = 0.7,
-    } = options
+    const { enableSearch = false, temperature = 0.7 } = options
 
-    const searchParams = enableSearch
-      ? {
-          mode: 'on' as const,
-          sources: [{ type: 'x' as const }],
-          return_citations: true,
-          limit: searchLimit,
-        }
-      : undefined
+    // If search is enabled, include the x_search tool
+    const tools: XSearchTool[] | undefined = enableSearch ? [{ type: 'x_search' }] : undefined
 
     return this.chat({
-      messages: [{ role: 'user', content: prompt }],
-      search_parameters: searchParams,
+      input: [{ role: 'user', content: prompt }],
+      tools,
       temperature,
     })
   }
@@ -342,5 +413,14 @@ Focus on current, active discussions. Include specific examples where relevant.`
   }
 }
 
-// Singleton instance
-export const grokApi = new GrokApiClient()
+// Singleton instance (lazy initialization to avoid issues during testing)
+let _grokApiInstance: GrokApiClient | null = null
+
+export const grokApi = new Proxy({} as GrokApiClient, {
+  get(_target, prop) {
+    if (!_grokApiInstance) {
+      _grokApiInstance = new GrokApiClient()
+    }
+    return (_grokApiInstance as unknown as Record<string, unknown>)[prop as string]
+  },
+})

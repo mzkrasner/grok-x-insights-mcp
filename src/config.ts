@@ -23,7 +23,7 @@ export interface Config {
 
 export const config: Config = {
   GROK_API_KEY: process.env.GROK_API_KEY,
-  GROK_MODEL: process.env.GROK_MODEL || 'grok-4-fast',
+  GROK_MODEL: process.env.GROK_MODEL || 'grok-4-1-fast',
   DEFAULT_SEARCH_LIMIT: parseInt(process.env.DEFAULT_SEARCH_LIMIT || '50', 10),
   NODE_ENV: process.env.NODE_ENV || 'development',
   LOG_LEVEL: process.env.LOG_LEVEL || 'info',
