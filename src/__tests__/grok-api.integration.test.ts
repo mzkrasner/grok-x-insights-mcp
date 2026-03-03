@@ -63,7 +63,7 @@ describe.skipIf(shouldSkip)('GrokApiClient - Integration Tests', () => {
       // Log preview for debugging
       const content = result.choices[0].message.content
       console.log('Search posts response preview:', content.substring(0, 200))
-    }, 45000)
+    }, 60000)
 
     it('returns citations when X posts are found', async () => {
       const result = await client.searchPosts('technology trends', {
@@ -80,7 +80,7 @@ describe.skipIf(shouldSkip)('GrokApiClient - Integration Tests', () => {
       } else {
         console.log('No citations returned (topic may have limited X activity)')
       }
-    }, 45000)
+    }, 60000)
 
     it('includes time window in analysis context', async () => {
       const result = await client.searchPosts('software development', {
@@ -107,7 +107,7 @@ describe.skipIf(shouldSkip)('GrokApiClient - Integration Tests', () => {
       if (!hasTimeContext) {
         console.log('Note: Time window not explicitly mentioned in response')
       }
-    }, 45000)
+    }, 60000)
 
     it('respects sentiment analysis type', async () => {
       const result = await client.searchPosts('electric vehicles', {
@@ -130,7 +130,7 @@ describe.skipIf(shouldSkip)('GrokApiClient - Integration Tests', () => {
         content.includes('feeling')
 
       expect(hasSentimentTerms).toBe(true)
-    }, 45000)
+    }, 60000)
   })
 
   describe('analyzeTopic()', () => {
@@ -159,7 +159,7 @@ describe.skipIf(shouldSkip)('GrokApiClient - Integration Tests', () => {
         content.includes('trend')
 
       expect(hasRequestedAspects).toBe(true)
-    }, 45000)
+    }, 60000)
 
     it('handles multiple analysis aspects', async () => {
       const aspects = [
@@ -180,7 +180,7 @@ describe.skipIf(shouldSkip)('GrokApiClient - Integration Tests', () => {
       // Response should be substantial given multiple aspects requested
       const content = result.choices[0].message.content
       expect(content.length).toBeGreaterThan(100)
-    }, 45000)
+    }, 60000)
   })
 
   describe('getTrends()', () => {
@@ -206,7 +206,7 @@ describe.skipIf(shouldSkip)('GrokApiClient - Integration Tests', () => {
         content.includes('viral')
 
       expect(hasTrendContent).toBe(true)
-    }, 45000)
+    }, 60000)
 
     it('filters trends by category', async () => {
       const result = await client.getTrends({
@@ -229,7 +229,7 @@ describe.skipIf(shouldSkip)('GrokApiClient - Integration Tests', () => {
         content.includes('innovation')
 
       expect(hasTechContent).toBe(true)
-    }, 45000)
+    }, 60000)
   })
 
   describe('generalChat()', () => {
@@ -273,7 +273,7 @@ describe.skipIf(shouldSkip)('GrokApiClient - Integration Tests', () => {
       } else {
         console.log('No citations returned (topic may have limited X activity)')
       }
-    }, 45000)
+    }, 60000)
 
     it('respects temperature parameter (determinism test)', async () => {
       const lowTempResult1 = await client.generalChat('List exactly 3 prime numbers', {
@@ -352,7 +352,7 @@ describe.skipIf(shouldSkip)('GrokApiClient - Integration Tests', () => {
         console.log('Response is not JSON:', content.substring(0, 100))
         // This is acceptable - model may not always return JSON
       }
-    }, 45000)
+    }, 60000)
   })
 })
 
