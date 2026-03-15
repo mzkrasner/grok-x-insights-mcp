@@ -62,25 +62,33 @@ class Logger {
 
   error(message: string, ...args: unknown[]): void {
     if (this.shouldLog('error')) {
-      console.error(`[ERROR] ${this.redact(message)}`, ...args)
+      process.stderr.write(
+        `[ERROR] ${this.redact(message)}${args.length ? ' ' + args.map(String).join(' ') : ''}\n`
+      )
     }
   }
 
   warn(message: string, ...args: unknown[]): void {
     if (this.shouldLog('warn')) {
-      console.warn(`[WARN] ${this.redact(message)}`, ...args)
+      process.stderr.write(
+        `[WARN] ${this.redact(message)}${args.length ? ' ' + args.map(String).join(' ') : ''}\n`
+      )
     }
   }
 
   info(message: string, ...args: unknown[]): void {
     if (this.shouldLog('info')) {
-      console.info(`[INFO] ${this.redact(message)}`, ...args)
+      process.stderr.write(
+        `[INFO] ${this.redact(message)}${args.length ? ' ' + args.map(String).join(' ') : ''}\n`
+      )
     }
   }
 
   debug(message: string, ...args: unknown[]): void {
     if (this.shouldLog('debug')) {
-      console.debug(`[DEBUG] ${this.redact(message)}`, ...args)
+      process.stderr.write(
+        `[DEBUG] ${this.redact(message)}${args.length ? ' ' + args.map(String).join(' ') : ''}\n`
+      )
     }
   }
 }
