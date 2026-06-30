@@ -25,6 +25,73 @@ const GROK_API_BASE_URL = 'https://api.x.ai/v1/responses'
 const MAX_RETRIES = 3
 const RETRYABLE_STATUS_CODES = [429, 500, 502, 503, 504]
 
+export interface XquikSearchResponse {
+  query: string
+  queryType: string
+  count: number
+  tweets: unknown[]
+  raw: unknown
+}
+
+function normalizeXquikTweets(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) {
+    return payload
+  }
+  if (!payload || typeof payload !== 'object') {
+    return []
+  }
+
+  const record = payload as Record<string, unknown>
+  for (const key of ['tweets', 'data', 'results', 'items']) {
+    const value = record[key]
+    if (Array.isArray(value)) {
+      return value
+    }
+  }
+
+  return []
+}
+
+export async function searchXquikPosts(
+  query: string,
+  options: {
+    queryType?: string
+    limit?: number
+    cursor?: string
+  } = {}
+): Promise<XquikSearchResponse> {
+  const trimmedQuery = query.trim()
+  if (!trimmedQuery) {
+    throw new Error('query is required')
+  }
+
+  const limit = Math.min(Math.max(options.limit ?? config.DEFAULT_SEARCH_LIMIT, 1), 100)
+  const queryType = options.queryType || 'Latest'
+  const headers = config.XQUIK_API_KEY ? { 'x-api-key': config.XQUIK_API_KEY } : undefined
+  const response = await axios.get<unknown>(
+    `${config.XQUIK_BASE_URL.replace(/\/+$/, '')}/api/v1/x/tweets/search`,
+    {
+      headers,
+      params: {
+        q: trimmedQuery,
+        queryType,
+        limit,
+        ...(options.cursor ? { cursor: options.cursor } : {}),
+      },
+      timeout: 120000,
+    }
+  )
+  const tweets = normalizeXquikTweets(response.data)
+
+  return {
+    query: trimmedQuery,
+    queryType,
+    count: tweets.length,
+    tweets,
+    raw: response.data,
+  }
+}
+
 export class GrokApiError extends Error {
   public status: number
   public response?: GrokErrorResponse

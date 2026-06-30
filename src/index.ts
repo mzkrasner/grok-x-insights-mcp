@@ -10,7 +10,7 @@ import {
 import { z } from 'zod'
 
 import { config, logger, validateEnv } from './config.js'
-import { GrokApiError, grokApi } from './grok-api.js'
+import { GrokApiError, grokApi, searchXquikPosts } from './grok-api.js'
 
 // Validate environment on startup
 validateEnv()
@@ -145,6 +145,38 @@ const tools: Tool[] = [
       required: ['prompt'],
     },
   },
+  {
+    name: 'xquik_search_posts',
+    description:
+      'Search raw public X/Twitter posts through Xquik. This is an optional companion to the Grok analysis tools.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'The X/Twitter search query',
+        },
+        queryType: {
+          type: 'string',
+          description: 'Search mode to use',
+          enum: ['Top', 'Latest'],
+          default: 'Latest',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of posts to return (1-100)',
+          minimum: 1,
+          maximum: 100,
+          default: 50,
+        },
+        cursor: {
+          type: 'string',
+          description: 'Optional pagination cursor from a previous response',
+        },
+      },
+      required: ['query'],
+    },
+  },
 ]
 
 // Zod schemas for input validation
@@ -172,6 +204,13 @@ const ChatParams = z.object({
   enableSearch: z.boolean().optional().default(false),
   searchLimit: z.number().min(1).max(50).optional().default(50),
   temperature: z.number().min(0).max(1).optional().default(0.7),
+})
+
+const XquikSearchParams = z.object({
+  query: z.string(),
+  queryType: z.enum(['Top', 'Latest']).optional().default('Latest'),
+  limit: z.number().min(1).max(100).optional().default(50),
+  cursor: z.string().optional(),
 })
 
 // Create MCP server
@@ -309,6 +348,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 null,
                 2
               ),
+            },
+          ],
+        }
+      }
+
+      case 'xquik_search_posts': {
+        const params = XquikSearchParams.parse(args)
+        const response = await searchXquikPosts(params.query, {
+          queryType: params.queryType,
+          limit: params.limit,
+          cursor: params.cursor,
+        })
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(response, null, 2),
             },
           ],
         }

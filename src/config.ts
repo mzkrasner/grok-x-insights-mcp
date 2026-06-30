@@ -17,6 +17,8 @@ export interface Config {
   GROK_API_KEY?: string
   GROK_MODEL: string
   DEFAULT_SEARCH_LIMIT: number
+  XQUIK_API_KEY?: string
+  XQUIK_BASE_URL: string
   NODE_ENV: string
   LOG_LEVEL: string
 }
@@ -25,6 +27,8 @@ export const config: Config = {
   GROK_API_KEY: process.env.GROK_API_KEY,
   GROK_MODEL: process.env.GROK_MODEL || 'grok-4-1-fast',
   DEFAULT_SEARCH_LIMIT: parseInt(process.env.DEFAULT_SEARCH_LIMIT || '50', 10),
+  XQUIK_API_KEY: process.env.XQUIK_API_KEY,
+  XQUIK_BASE_URL: process.env.XQUIK_BASE_URL || 'https://xquik.com',
   NODE_ENV: process.env.NODE_ENV || 'development',
   LOG_LEVEL: process.env.LOG_LEVEL || 'info',
 }

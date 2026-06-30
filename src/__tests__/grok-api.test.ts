@@ -5,11 +5,12 @@
 import axios from 'axios'
 import { type Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { GrokApiClient, GrokApiError } from '../grok-api.js'
+import { GrokApiClient, GrokApiError, searchXquikPosts } from '../grok-api.js'
 import { GrokAgentRequestSchema, GrokChatResponseSchema } from '../schemas.js'
 import {
   assertNonEmptyContent,
   assertValidChatResponse,
+  createAxiosResponse,
   createMockAxiosError,
   createMockAxiosResponse,
 } from './test-utils.js'
@@ -19,6 +20,7 @@ vi.mock('axios')
 
 // Cast to properly typed mocks
 const mockedPost = axios.post as unknown as Mock
+const mockedGet = axios.get as unknown as Mock
 const mockedIsAxiosError = axios.isAxiosError as unknown as Mock
 
 describe('GrokApiClient - Unit Tests', () => {
@@ -53,6 +55,42 @@ describe('GrokApiClient - Unit Tests', () => {
       expect(() => new GrokApiClient('xai-abc123')).not.toThrow()
       // Also accept test keys
       expect(() => new GrokApiClient('test-key')).not.toThrow()
+    })
+  })
+
+  describe('searchXquikPosts()', () => {
+    it('sends a normalized Xquik search request', async () => {
+      mockedGet.mockResolvedValueOnce(
+        createAxiosResponse({
+          tweets: [{ id: '123', text: 'hello' }],
+          nextCursor: 'next',
+        })
+      )
+
+      const result = await searchXquikPosts('  open source  ', {
+        queryType: 'Latest',
+        limit: 120,
+        cursor: 'cursor-1',
+      })
+
+      expect(mockedGet).toHaveBeenCalledTimes(1)
+      const [url, requestConfig] = mockedGet.mock.calls[0]
+      expect(url).toBe('https://xquik.com/api/v1/x/tweets/search')
+      expect(requestConfig?.params).toMatchObject({
+        q: 'open source',
+        queryType: 'Latest',
+        limit: 100,
+        cursor: 'cursor-1',
+      })
+      expect(result).toMatchObject({
+        query: 'open source',
+        queryType: 'Latest',
+        count: 1,
+      })
+    })
+
+    it('rejects empty Xquik queries', async () => {
+      await expect(searchXquikPosts('   ')).rejects.toThrow('query is required')
     })
   })
 
